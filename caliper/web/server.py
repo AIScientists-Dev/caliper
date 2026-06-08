@@ -23,16 +23,18 @@ import time
 from typing import List
 
 from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 
 from ..core.agent import CaliperAgent
 from ..core.executor import Executor
 from ..core.registry import load_pack
+from ..config import get_workspace
 from ..llm import make_llm
 from ..trust.judge import Judge
 
 HERE = os.path.dirname(__file__)
-DATA_ROOT = os.path.abspath(os.environ.get("CALIPER_DATA_ROOT", os.getcwd()))
+DATA_ROOT = os.path.realpath(os.environ.get("CALIPER_DATA_ROOT", os.getcwd()))
+WORKSPACE = os.path.realpath(get_workspace() or os.path.join(os.getcwd(), "caliper_workspace"))
 PACK = os.environ.get("CALIPER_PACK", "bio")
 _SESSIONS = set()           # auth tokens
 _HISTORY: dict = {}         # session_id -> {"title":..., "ts":..., "messages":[...]}
@@ -70,7 +72,7 @@ def whoami(_=Depends(require_auth)):
 
 # --- read-only data browser/search (confined to DATA_ROOT) -----------------------
 def _safe(path: str) -> str:
-    p = os.path.abspath(os.path.join(DATA_ROOT, path or ""))
+    p = os.path.realpath(os.path.join(DATA_ROOT, path or ""))
     if p != DATA_ROOT and not p.startswith(DATA_ROOT + os.sep):
         raise HTTPException(status_code=400, detail="outside data root")
     return p
@@ -162,6 +164,17 @@ async def chat(request: Request, _=Depends(require_auth)):
             yield f"data: {json.dumps(e)}\n\n"
 
     return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+@app.get("/api/artifact")
+def artifact(path: str, _=Depends(require_auth)):
+    """Serve a figure/file produced by a run — confined to the workspace."""
+    p = os.path.realpath(path)
+    if p != WORKSPACE and not p.startswith(WORKSPACE + os.sep):
+        raise HTTPException(status_code=400, detail="outside workspace")
+    if not os.path.isfile(p):
+        raise HTTPException(status_code=404)
+    return FileResponse(p)
 
 
 @app.get("/api/sessions")

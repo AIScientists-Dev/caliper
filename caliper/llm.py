@@ -90,18 +90,53 @@ class OpenAILLM(BaseLLM):
 
 # --- Offline deterministic stand-in -------------------------------------------------
 
-_MOCK_PLAN = """```json
-{
-  "summary": "Differential expression between two conditions via log2 fold-change.",
-  "steps": [
-    {
-      "tool": "deseq2",
-      "rationale": "Two-condition bulk RNA-seq count matrix -> identify up/down-regulated genes.",
-      "code": "import os, csv, json, math\\ninp = json.loads(os.environ['CALIPER_INPUTS'])[0]['path']\\nrows = list(csv.reader(open(inp)))\\nheader = rows[0][1:]\\nhalf = len(header) // 2\\ngenes = []\\nfor r in rows[1:]:\\n    name = r[0]; vals = [float(x) for x in r[1:]]\\n    a, b = vals[:half], vals[half:]\\n    ma = sum(a)/len(a) + 1.0; mb = sum(b)/len(b) + 1.0\\n    genes.append((name, math.log2(mb/ma)))\\nde = sorted([g for g in genes if abs(g[1]) > 1.0], key=lambda x: -abs(x[1]))\\nprint('CALIPER_RESULT:' + json.dumps({'n_genes': len(genes), 'n_de': len(de), 'top': [{'gene': g, 'log2fc': round(l, 3)} for g, l in de[:10]]}))"
-    }
-  ]
-}
-```"""
+import json as _json
+
+_MOCK_CODE = '''import os, json, math
+try:
+    inp = json.loads(os.environ.get("CALIPER_INPUTS", "[]"))
+    path = inp[0]["path"] if inp else None
+except Exception:
+    path = None
+genes = []
+if path:
+    import csv
+    rows = list(csv.reader(open(path)))
+    header = rows[0][1:]; half = len(header) // 2
+    for r in rows[1:]:
+        name = r[0]; vals = [float(x) for x in r[1:]]
+        a, b = vals[:half], vals[half:]
+        ma = sum(a)/len(a) + 1.0; mb = sum(b)/len(b) + 1.0
+        genes.append((name, math.log2(mb/ma)))
+else:
+    genes = [("MYC",2.6),("EGFR",2.0),("KRAS",1.8),("CDKN2A",2.1),("VEGFA",1.9),
+             ("TP53",-1.3),("PTEN",-1.4),("GAPDH",0.0),("ACTB",0.02),("BCL2",0.1)]
+de = sorted([g for g in genes if abs(g[1]) > 1.0], key=lambda x: -abs(x[1]))
+fig = None
+try:
+    import matplotlib; matplotlib.use("Agg"); import matplotlib.pyplot as plt
+    top = de[:10][::-1]
+    plt.figure(figsize=(5.4, 3.4))
+    plt.barh([g for g, _ in top], [v for _, v in top],
+             color=["#0e8f57" if v > 0 else "#c0735a" for _, v in top])
+    plt.axvline(0, color="#999", lw=.6); plt.xlabel("log2 fold-change")
+    plt.title("Top differentially-expressed genes"); plt.tight_layout()
+    fig = os.path.abspath("de_genes.png"); plt.savefig(fig, dpi=140); plt.close()
+except Exception:
+    pass
+res = {"n_genes": len(genes), "n_de": len(de),
+       "top": [{"gene": g, "log2fc": round(l, 3)} for g, l in de[:10]]}
+if fig:
+    res["figures"] = [fig]
+print("CALIPER_RESULT:" + json.dumps(res))
+'''
+
+_MOCK_PLAN = "```json\n" + _json.dumps({
+    "summary": "Differential expression — top up/down genes, with a figure.",
+    "steps": [{"tool": "deseq2",
+               "rationale": "Two-condition count matrix -> up/down-regulated genes + plot.",
+               "code": _MOCK_CODE}],
+}, indent=2) + "\n```"
 
 _MOCK_TRUST = '{"trust": 0.78, "rationale": "Clean two-group design, adequate replicates; '\
               'standard DE call. Mild uncertainty: no multiple-testing correction applied."}'
