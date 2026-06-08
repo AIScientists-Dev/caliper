@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Caliper</title>
+<style>
+  :root{--bg:#0f1714;--panel:#16201c;--line:#26332d;--mint:#abebc9;--text:#e7ece9;--mut:#9ba3ab;--amber:#e0b15a;--red:#e8908f;}
+  *{box-sizing:border-box} html,body{height:100%}
+  body{margin:0;display:flex;background:var(--bg);color:var(--text);font-family:"Helvetica Neue",system-ui,sans-serif;}
+  #sidebar{width:250px;background:#0c120f;border-right:1px solid var(--line);display:flex;flex-direction:column;padding:12px;gap:8px;}
+  #sidebar h1{font-size:18px;margin:4px 6px 8px;color:var(--mint);}
+  .btn{background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px 10px;cursor:pointer;font-size:13px;text-align:left;}
+  .btn:hover{border-color:var(--mint)}
+  #sessions{overflow:auto;flex:1;display:flex;flex-direction:column;gap:4px;margin-top:6px;}
+  .sess{font-size:12.5px;color:var(--mut);padding:6px 8px;border-radius:6px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .sess:hover{background:var(--panel);color:var(--text)}
+  #main{flex:1;display:flex;flex-direction:column;}
+  #chat{flex:1;overflow:auto;padding:24px 18px;}
+  .wrap{max-width:760px;margin:0 auto;}
+  .msg{margin:14px 0;} .who{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--mut);margin-bottom:4px;}
+  .user .bubble{background:#1b2722;border:1px solid var(--line);border-radius:10px;padding:10px 14px;}
+  .ev{font-size:13px;border-left:2px solid var(--line);padding:4px 0 4px 12px;margin:6px 0;color:var(--mut);}
+  .ev b{color:var(--text);} .ev.plan b{color:var(--mint);}
+  .badge{display:inline-block;font-size:11px;padding:2px 8px;border-radius:20px;font-weight:600;}
+  .accept{background:#173a28;color:var(--mint);} .escalate{background:#33270f;color:var(--amber);}
+  pre{background:#0c120f;border:1px solid var(--line);border-radius:8px;padding:10px;overflow:auto;font-size:12px;color:#cfe;max-height:200px;}
+  .answer{background:#13231b;border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:8px;font-size:13.5px;white-space:pre-wrap;}
+  #inputbar{border-top:1px solid var(--line);padding:14px 18px;}
+  #inputbar .wrap{display:flex;gap:8px;align-items:flex-end;}
+  #ctx{font-size:11px;color:var(--mut);max-width:760px;margin:0 auto 6px;}
+  textarea{flex:1;background:var(--panel);border:1px solid var(--line);color:var(--text);border-radius:10px;padding:10px;font-size:14px;resize:none;height:46px;font-family:inherit;}
+  #send{background:var(--mint);color:#0f1714;border:none;border-radius:10px;padding:0 18px;height:46px;font-weight:700;cursor:pointer;}
+  #drawer{position:fixed;right:0;top:0;height:100%;width:360px;background:#0c120f;border-left:1px solid var(--line);transform:translateX(100%);transition:.2s;padding:14px;overflow:auto;}
+  #drawer.open{transform:none;}
+  #drawer h3{color:var(--mint);font-size:14px;margin:4px 0 10px;}
+  .row{display:flex;justify-content:space-between;font-size:12.5px;padding:6px 8px;border-radius:6px;cursor:pointer;color:var(--mut);}
+  .row:hover{background:var(--panel);color:var(--text);} .row.sel{color:var(--mint);}
+  #overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;}
+  #login{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:24px;width:300px;}
+  #login input{width:100%;padding:9px;border-radius:8px;border:1px solid var(--line);background:#0c120f;color:var(--text);margin:10px 0;}
+</style>
+</head>
+<body>
+<div id="sidebar">
+  <h1>⟡ Caliper</h1>
+  <button class="btn" onclick="newChat()">+ New chat</button>
+  <button class="btn" onclick="toggleDrawer()">📁 Browse data</button>
+  <div id="sessions"></div>
+  <div style="font-size:11px;color:var(--mut)">an analyst that knows when to trust itself</div>
+</div>
+
+<div id="main">
+  <div id="chat"><div class="wrap" id="thread"></div></div>
+  <div id="inputbar">
+    <div id="ctx" class="wrap"></div>
+    <div class="wrap">
+      <textarea id="box" placeholder="Ask Caliper to analyze data… (select files via Browse data)"></textarea>
+      <button id="send" onclick="send()">Send</button>
+    </div>
+  </div>
+</div>
+
+<div id="drawer">
+  <h3>Data browser <span style="float:right;cursor:pointer" onclick="toggleDrawer()">✕</span></h3>
+  <input id="searchbox" placeholder="search filenames…" style="width:100%;padding:7px;border-radius:6px;border:1px solid var(--line);background:#0c120f;color:var(--text)" onkeydown="if(event.key==='Enter')doSearch()">
+  <div id="crumbs" style="font-size:12px;color:var(--mut);margin:8px 0"></div>
+  <div id="listing"></div>
+</div>
+
+<div id="overlay"><div id="login">
+  <h3 style="color:var(--mint);margin:0">Caliper login</h3>
+  <input id="pw" type="password" placeholder="password" onkeydown="if(event.key==='Enter')doLogin()">
+  <button class="btn" style="width:100%;text-align:center" onclick="doLogin()">Enter</button>
+  <div id="loginerr" style="color:var(--red);font-size:12px;margin-top:6px"></div>
+</div></div>
+
+<script>
+let SID=null, SELECTED=[], CWD="";
+const $=id=>document.getElementById(id);
+
+async function api(u,o){const r=await fetch(u,o);if(r.status===401){$('overlay').style.display='flex';throw new Error('auth')}return r;}
+async function doLogin(){
+  const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({password:$('pw').value})});
+  if(r.ok){$('overlay').style.display='none';init();}else{$('loginerr').textContent='wrong password';}
+}
+function newChat(){SID=null;SELECTED=[];$('thread').innerHTML='';renderCtx();}
+function renderCtx(){$('ctx').innerHTML=SELECTED.length?('selected: '+SELECTED.map(p=>p.split('/').pop()).join(', ')):'';}
+function toggleDrawer(){$('drawer').classList.toggle('open');if($('drawer').classList.contains('open'))browse(CWD);}
+
+function el(cls,html){const d=document.createElement('div');d.className=cls;if(html)d.innerHTML=html;return d;}
+function addUser(t){const m=el('msg user');m.appendChild(el('who','you'));m.appendChild(el('bubble',escapeHtml(t)));$('thread').appendChild(m);scroll();}
+function escapeHtml(s){return (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function scroll(){$('chat').scrollTop=$('chat').scrollHeight;}
+
+async function send(){
+  const t=$('box').value.trim(); if(!t)return; $('box').value='';
+  addUser(t);
+  const m=el('msg'); m.appendChild(el('who','caliper')); const body=el('body'); m.appendChild(body); $('thread').appendChild(m); scroll();
+  const r=await api('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({message:t,data_paths:SELECTED,session_id:SID})});
+  const reader=r.body.getReader(); const dec=new TextDecoder(); let buf='';
+  while(true){const {value,done}=await reader.read(); if(done)break; buf+=dec.decode(value,{stream:true});
+    let i; while((i=buf.indexOf('\n\n'))>=0){const line=buf.slice(0,i); buf=buf.slice(i+2);
+      if(line.startsWith('data: ')) handle(JSON.parse(line.slice(6)),body);}}
+  loadSessions();
+}
+function handle(e,body){
+  if(e.type==='session'){SID=e.session_id;}
+  else if(e.type==='plan'){body.appendChild(el('ev plan','<b>Plan:</b> '+escapeHtml(e.summary)+' &nbsp;<span style="color:#6b7280">tools: '+(e.tools||[]).join(', ')+'</span>'));}
+  else if(e.type==='step'){body.appendChild(el('ev','▸ running <b>'+escapeHtml(e.tool)+'</b> — '+escapeHtml(e.rationale)));}
+  else if(e.type==='exec'){const ev=el('ev',(e.blocked?'⛔ blocked by safety policy':(e.ok?'✓ step ok':'✗ step error'))); if(e.stdout_tail){const p=document.createElement('pre');p.textContent=e.stdout_tail;ev.appendChild(p);} body.appendChild(ev);}
+  else if(e.type==='trust'){body.appendChild(el('ev','<b>Trust score:</b> '+e.trust.toFixed(3)));}
+  else if(e.type==='decision'){const cls=e.accepted?'accept':'escalate'; body.appendChild(el('ev','Decision: <span class="badge '+cls+'">'+e.decision.toUpperCase()+'</span>')); if(e.answer&&Object.keys(e.answer).length){body.appendChild(el('answer',escapeHtml(JSON.stringify(e.answer,null,2))));}}
+  else if(e.type==='error'){body.appendChild(el('ev','<span style="color:var(--red)">error: '+escapeHtml(e.message)+'</span>'));}
+  scroll();
+}
+
+async function browse(path){CWD=path; const r=await api('/api/browse?path='+encodeURIComponent(path)); const d=await r.json();
+  $('crumbs').textContent='/'+d.path; const L=$('listing'); L.innerHTML='';
+  if(d.path&&d.path!=='.'){const up=el('row','⬆ ..');up.onclick=()=>browse(d.path.split('/').slice(0,-1).join('/'));L.appendChild(up);}
+  d.entries.forEach(en=>{const full=(d.path&&d.path!=='.'?d.path+'/':'')+en.name;
+    const row=el('row',(en.dir?'📁 ':'📄 ')+en.name+'<span>'+(en.size!=null?(en.size/1e6).toFixed(1)+'M':'')+'</span>');
+    if(SELECTED.includes(d.root+'/'+full))row.classList.add('sel');
+    row.onclick=()=>{ if(en.dir){browse(full);} else {const abs=d.root+'/'+full; const i=SELECTED.indexOf(abs); if(i<0)SELECTED.push(abs);else SELECTED.splice(i,1); renderCtx(); browse(d.path);} };
+    L.appendChild(row);});
+}
+async function doSearch(){const q=$('searchbox').value.trim(); if(!q)return browse(CWD);
+  const r=await api('/api/search?q='+encodeURIComponent(q)); const d=await r.json(); const L=$('listing'); L.innerHTML='';
+  $('crumbs').textContent='search: '+q+(d.truncated?' (truncated)':'');
+  d.hits.forEach(h=>{const row=el('row','📄 '+h); row.onclick=()=>{const abs=document.body.dataset.root+'/'+h;}; L.appendChild(row);});
+}
+async function loadSessions(){const r=await api('/api/sessions'); const s=await r.json(); const c=$('sessions'); c.innerHTML='';
+  s.forEach(x=>{const d=el('sess',x.title);d.onclick=()=>openSession(x.id);c.appendChild(d);});}
+async function openSession(id){const r=await api('/api/session/'+id); const s=await r.json(); SID=id; $('thread').innerHTML='';
+  s.messages.forEach(m=>{ if(m.role==='user')addUser(m.content);
+    else {const mm=el('msg');mm.appendChild(el('who','caliper'));const b=el('body');mm.appendChild(b);(m.events||[]).forEach(e=>handle(e,b));$('thread').appendChild(mm);} }); scroll();}
+
+async function init(){try{await api('/api/whoami');loadSessions();}catch(e){}}
+init();
+</script>
+</body>
+</html>

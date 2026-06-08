@@ -112,18 +112,24 @@ class CaliperAgent:
         return Step(tool=s.get("tool", "repair"), rationale=s.get("rationale", "repair retry"),
                     code=s.get("code", ""))
 
-    def run(self, task: str, data_files: List[dict]) -> CaliperResult:
+    def run(self, task: str, data_files: List[dict], on_event=None) -> CaliperResult:
+        emit = on_event or (lambda e: None)
         plan = extract_json(self.llm.complete(self._plan_prompt(task, data_files),
                                               system=PLAN_SYSTEM))
         steps = [Step(tool=s.get("tool", "?"), rationale=s.get("rationale", ""),
                       code=s.get("code", "")) for s in plan.get("steps", [])]
+        emit({"type": "plan", "summary": plan.get("summary", ""),
+              "tools": [s.tool for s in steps]})
 
         stdout, answer = "", {}
         for st in steps:
+            emit({"type": "step", "tool": st.tool, "rationale": st.rationale})
             res = self.executor.run(st.code, inputs=data_files)
             stdout += res.stdout
             if res.stderr:
                 stdout += f"\n[stderr] {res.stderr}"
+            emit({"type": "exec", "tool": st.tool, "ok": res.ok,
+                  "blocked": getattr(res, "blocked", False), "stdout_tail": res.stdout[-600:]})
             parsed = parse_caliper_result(res.stdout)
             if parsed is not None:
                 answer = parsed
@@ -141,10 +147,12 @@ class CaliperAgent:
                     answer = parsed
 
         trust = self.judge.score(task, steps, answer, stdout)
+        emit({"type": "trust", "trust": trust})
         if self.feedback is not None and len(self.feedback) > 0:
             self.gate = self.feedback.recalibrate(self.alpha, self.delta)
         accepted = bool(self.gate and self.gate.decide(trust).accept)
         decision = "auto-accept" if accepted else "escalate"
+        emit({"type": "decision", "decision": decision, "accepted": accepted, "answer": answer})
 
         result = CaliperResult(task=task, answer=answer, trust=trust,
                                accepted=accepted, decision=decision,
