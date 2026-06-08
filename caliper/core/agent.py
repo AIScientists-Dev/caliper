@@ -22,7 +22,8 @@ PLAN_SYSTEM = (
     "runnable Python `code` that reads inputs from the JSON in env var CALIPER_INPUTS (a "
     "list of {'path','label'}), performs the step, and prints its result on a single line "
     "beginning with `CALIPER_RESULT:` immediately followed by compact JSON. Do not invent "
-    "file paths."
+    "file paths. Write all outputs and temp files to the current working directory (the "
+    "confined workspace); input files are READ-ONLY — never modify or delete them."
 )
 
 # What the executor can actually run. Stating this prevents the planner from emitting

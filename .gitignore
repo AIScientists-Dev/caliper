@@ -9,5 +9,7 @@ venv/
 .env
 runs/
 feedback.jsonl
+caliper_workspace/
+.caliper_runs/
 .pytest_cache/
 .DS_Store
