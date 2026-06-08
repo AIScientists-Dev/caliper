@@ -32,6 +32,10 @@ can't act on it unattended. Caliper closes that gap, across fields.
 
 ## How it works — three thin layers
 
+<p align="center">
+  <img src="docs/architecture.svg" alt="Caliper architecture: your data flows down through the Domain Pack (your field's trusted tools), the Agent Core (plan, run, record), and the Trust & Feedback layer (calibrated confidence → accept or ask a human), which learns from each correction." width="620">
+</p>
+
 | Layer | What it is |
 |-------|------------|
 | **① Domain Pack** | A small, versioned registry of a field's vetted tools (metadata — the model already knows the rest). |
@@ -40,6 +44,25 @@ can't act on it unattended. Caliper closes that gap, across fields.
 
 One core, swappable packs. Ships with a working **`bio`** pack (genomics); **`astro`**
 is a skeleton proving the core is domain-agnostic.
+
+## How Caliper is different from other science agents
+
+Most science-AI agents focus on *capability* — assembling tools and automating the
+analysis. Caliper adds the piece they leave out: an honest, **calibrated** signal of
+*when to trust the result*, and the discipline to hand borderline cases back to a human.
+
+| | Curated tools | Runs analysis end-to-end | Calibrated confidence | Defers to a human when unsure | Learns from your corrections |
+|---|:--:|:--:|:--:|:--:|:--:|
+| **Caliper** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| General-purpose science agents | ✅ | ✅ | — | — | — |
+| Autonomous research agents | ✅ | ✅ | — | ✗ *(no human in the loop)* | — |
+| A bare LLM + tools | partial | partial | — | — | — |
+
+Others hand you an answer. Caliper hands you an answer **plus a provable bound on how
+often it is wrong when it doesn't ask for help** — and sharpens that judgment every time
+you correct it.
+
+<sub>Comparison reflects each category's described design at the time of writing. These are complementary efforts; Caliper's trust layer can in principle sit on top of an existing agent.</sub>
 
 ## The promise you can set
 
