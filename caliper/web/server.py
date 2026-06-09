@@ -299,6 +299,13 @@ def session(sid: str, _=Depends(require_auth)):
     return _HISTORY[sid]
 
 
+@app.delete("/api/session/{sid}")
+def delete_session(sid: str, _=Depends(require_auth)):
+    _HISTORY.pop(sid, None)
+    logstore.delete_session(WORKSPACE, sid)
+    return {"ok": True}
+
+
 # --- frontend --------------------------------------------------------------------
 @app.get("/", response_class=HTMLResponse)
 def index():

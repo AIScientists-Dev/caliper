@@ -27,6 +27,13 @@ def save_session(ws: str, sid: str, session: dict) -> str:
     return path
 
 
+def delete_session(ws: str, sid: str) -> None:
+    try:
+        os.remove(os.path.join(_sessions_dir(ws), sid + ".json"))
+    except OSError:
+        pass
+
+
 def load_sessions(ws: str) -> Dict[str, dict]:
     out: Dict[str, dict] = {}
     for p in glob.glob(os.path.join(_sessions_dir(ws), "*.json")):

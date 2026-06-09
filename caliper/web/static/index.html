@@ -24,8 +24,11 @@
   .btn.primary{background:var(--mint);color:#0a0f0d;font-weight:600;border-color:var(--mint)}
   .btn.primary:hover{background:var(--mint-d)}
   #sessions{overflow:auto;flex:1;display:flex;flex-direction:column;gap:2px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
-  .sess{font-size:13px;color:var(--mut);padding:8px 10px;border-radius:8px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sess{font-size:13px;color:var(--mut);padding:8px 10px;border-radius:8px;display:flex;align-items:center;gap:6px}
   .sess:hover{background:var(--panel2);color:var(--text)}
+  .sess .stitle{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
+  .sess .sdel{color:var(--faint);cursor:pointer;opacity:0;font-size:13px;padding:0 2px}
+  .sess:hover .sdel{opacity:1} .sess .sdel:hover{color:var(--red)}
   .tagline{font-size:11px;color:var(--faint);padding:6px}
 
   /* main */
@@ -253,7 +256,13 @@ async function doSearch(){const q=$('searchbox').value.trim();if(!q)return brows
   const root=(await(await api('/api/whoami')).json()).data_root;
   d.hits.forEach(h=>{const abs=root+'/'+h;const row=el('row'+(SELECTED.includes(abs)?' sel':''),'📄 '+esc(h));row.onclick=()=>{const i=SELECTED.indexOf(abs);if(i<0)SELECTED.push(abs);else SELECTED.splice(i,1);renderCtx();doSearch();};L.appendChild(row);});}
 
-async function loadSessions(){try{const s=await(await api('/api/sessions')).json();const c=$('sessions');c.innerHTML='';s.forEach(x=>{const d=el('sess','💬 '+esc(x.title));d.onclick=()=>openSession(x.id);c.appendChild(d);});}catch(e){}}
+async function loadSessions(){try{const s=await(await api('/api/sessions')).json();const c=$('sessions');c.innerHTML='';
+  s.forEach(x=>{const d=el('sess');
+    d.innerHTML='<span class="stitle">💬 '+esc(x.title)+'</span><span class="sdel" title="delete">✕</span>';
+    d.querySelector('.stitle').onclick=()=>openSession(x.id);
+    d.querySelector('.sdel').onclick=(e)=>{e.stopPropagation();delSession(x.id);};
+    c.appendChild(d);});}catch(e){}}
+async function delSession(id){ if(!confirm('Delete this conversation?'))return; try{await api('/api/session/'+id,{method:'DELETE'});}catch(e){} if(SID===id)newChat(); loadSessions(); }
 async function openSession(id){const s=await(await api('/api/session/'+id)).json();SID=id;$('thread').innerHTML='';
   s.messages.forEach(m=>{if(m.role==='user')$('thread').appendChild(mk('user','You','<div class="text">'+esc(m.content)+'</div>',true));
     else{const mm=mk('caliper','Caliper','');const det=document.createElement('details');const su=document.createElement('summary');su.textContent='✓ Done';const evs=el('events');det.appendChild(su);det.appendChild(evs);mm.querySelector('.body').appendChild(det);const rh=el('');mm.querySelector('.body').appendChild(rh);(m.events||[]).forEach(e=>handle(e,evs,rh,su,det));$('thread').appendChild(mm);}});scroll();}
