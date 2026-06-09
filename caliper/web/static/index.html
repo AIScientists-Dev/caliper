@@ -77,6 +77,7 @@
   .fbtns{display:flex;gap:8px}
   .fb{border:1px solid var(--line2);background:var(--panel2);color:var(--text);border-radius:8px;padding:7px 14px;cursor:pointer;font-size:13px}
   .fb:hover{border-color:var(--mint)} .fb.no:hover{border-color:var(--red)}
+  .fbnote{width:100%;background:#0a0f0d;border:1px solid var(--line2);border-radius:8px;color:var(--text);padding:8px;font-size:13px;margin-bottom:8px;resize:vertical;font-family:inherit}
   .stdout{background:#0a0f0d;border:1px solid var(--line);border-radius:6px;padding:8px;font-size:11px;color:#9fddcc;max-height:150px;overflow:auto;white-space:pre-wrap;margin-top:6px;font-family:ui-monospace,monospace}
 
   /* input */
@@ -108,9 +109,32 @@
   .connectcard{background:var(--panel2);border:1px solid var(--line2);border-radius:12px;padding:20px;text-align:center}
   .connectcard .muted{color:var(--mut);font-size:12.5px}
   #login{width:340px}
+
+  /* mobile top bar + responsive drawer nav (Manus-style) */
+  #topbar{display:none;align-items:center;gap:12px;padding:10px 14px;background:#0a0f0d;border-bottom:1px solid var(--line);position:sticky;top:0;z-index:6}
+  #burger{background:none;border:none;color:var(--text);font-size:20px;cursor:pointer;padding:2px 6px;line-height:1}
+  #scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:15}
+  #scrim.show{display:block}
+  @media (max-width:820px){
+    body{flex-direction:column}
+    #topbar{display:flex}
+    #sidebar{position:fixed;top:0;left:0;height:100%;width:80%;max-width:300px;z-index:20;transform:translateX(-100%);transition:transform .22s ease;box-shadow:0 0 50px rgba(0,0,0,.6)}
+    #sidebar.open{transform:none}
+    #main{width:100%}
+    #chat{padding:18px 14px 8px}
+    #inputbar{padding:10px 12px 14px}
+    .composer,.col,#ctx,.empty{max-width:100%}
+    .empty{margin-top:12vh}
+    #drawer{width:100%}
+    .msg{margin:18px 0}
+    #login{width:88vw}
+  }
+  @media (min-width:821px){#sidebar{transform:none!important}}
 </style>
 </head>
 <body>
+<div id="topbar"><button id="burger" onclick="toggleSidebar()" aria-label="menu">☰</button><div class="brand" style="padding:0;font-size:16px"><span class="dot">⟡</span> Caliper</div></div>
+<div id="scrim" onclick="toggleSidebar()"></div>
 <div id="sidebar">
   <div class="brand"><span class="dot">⟡</span> Caliper <small>v0.1</small></div>
   <button class="btn primary" onclick="newChat()">✎ New analysis</button>
@@ -191,7 +215,9 @@ async function showConnect(){
 function doConnect(){ $('overlay').style.display='none'; loadSessions(); }
 function backToSignin(){ $('connect').style.display='none'; $('signin').style.display='block'; }
 
-function newChat(){SID=null;SELECTED=[];$('thread').innerHTML='';$('thread').appendChild($('empty')||el());renderCtx();}
+function toggleSidebar(){const open=$('sidebar').classList.toggle('open');$('scrim').classList.toggle('show',open);}
+function closeNav(){$('sidebar').classList.remove('open');$('scrim').classList.remove('show');}
+function newChat(){SID=null;SELECTED=[];$('thread').innerHTML='';$('thread').appendChild($('empty')||el());renderCtx();closeNav();}
 function renderCtx(){const c=$('ctx');c.innerHTML='';SELECTED.forEach((p,i)=>{const ch=el('chip','📄 <b>'+esc(p.split('/').pop())+'</b><span onclick="unselect('+i+')">✕</span>');c.appendChild(ch);});}
 function unselect(i){SELECTED.splice(i,1);renderCtx();}
 function toggleDrawer(){$('drawer').classList.toggle('open');if($('drawer').classList.contains('open'))browse(CWD);}
@@ -240,9 +266,19 @@ function mdToHtml(md){
   s=s.replace(/(?:^|\n)((?:- .*(?:\n|$))+)/g,m=>'<ul>'+m.trim().split(/\n/).map(l=>'<li>'+l.replace(/^- /,'')+'</li>').join('')+'</ul>');
   return s.split(/\n{2,}/).map(b=>/^\s*<(h3|h4|ul)/.test(b)?b:'<p>'+b.replace(/\n/g,'<br>')+'</p>').join('');
 }
-async function sendFeedback(row,correct,trust){
-  try{await api('/api/feedback',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({correct:correct,trust:trust,session_id:SID})});}catch(err){}
-  row.innerHTML='<span style="color:var(--mint)">✓ Thanks — recorded. Caliper uses this to learn when it can answer on its own and when to ask you.</span>';
+function sendFeedback(row,correct,trust){
+  row.innerHTML='<div class="q">'+(correct?'Glad it looks right.':'Thanks for flagging it.')
+    +' Add a note so Caliper learns <span style="color:var(--faint)">(optional)</span>:</div>'
+    +'<textarea class="fbnote" rows="2" placeholder="'+(correct?'e.g. matches my prior result; design is correct':'e.g. the ON/OFF conditions are swapped; missing replicates')+'"></textarea>'
+    +'<div class="fbtns"><button class="fb send">Send</button><button class="fb skip">Skip</button></div>';
+  const note=row.querySelector('.fbnote');note.focus();
+  const post=async(comment)=>{
+    try{await api('/api/feedback',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({correct:correct,trust:trust,comment:comment,session_id:SID})});}catch(err){}
+    row.innerHTML='<span style="color:var(--mint)">✓ Thanks — recorded. Caliper uses this to learn when it can answer on its own and when to ask you.</span>';
+  };
+  row.querySelector('.send').onclick=()=>post(note.value.trim());
+  row.querySelector('.skip').onclick=()=>post('');
 }
 function handle(e,evs,resultHost,sum,det){
   if(e.type==='session'){SID=e.session_id;}
@@ -296,7 +332,7 @@ async function loadSessions(){try{const s=await(await api('/api/sessions')).json
     d.querySelector('.sdel').onclick=(e)=>{e.stopPropagation();delSession(x.id);};
     c.appendChild(d);});}catch(e){}}
 async function delSession(id){ if(!confirm('Delete this conversation?'))return; try{await api('/api/session/'+id,{method:'DELETE'});}catch(e){} if(SID===id)newChat(); loadSessions(); }
-async function openSession(id){const s=await(await api('/api/session/'+id)).json();SID=id;$('thread').innerHTML='';
+async function openSession(id){closeNav();const s=await(await api('/api/session/'+id)).json();SID=id;$('thread').innerHTML='';
   s.messages.forEach(m=>{if(m.role==='user')$('thread').appendChild(mk('user','You','<div class="text">'+esc(m.content)+'</div>',true));
     else{const mm=mk('caliper','Caliper','');const det=document.createElement('details');const su=document.createElement('summary');su.textContent='✓ Done';const evs=el('events');det.appendChild(su);det.appendChild(evs);mm.querySelector('.body').appendChild(det);const rh=el('');mm.querySelector('.body').appendChild(rh);(m.events||[]).forEach(e=>handle(e,evs,rh,su,det));$('thread').appendChild(mm);}});scroll();}
 

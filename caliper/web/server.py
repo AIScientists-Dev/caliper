@@ -319,7 +319,8 @@ async def feedback(request: Request, _=Depends(require_auth)):
     body = await request.json()
     try:
         agent().feedback.add(float(body.get("trust", 0.0)), bool(body.get("correct")),
-                             meta={"session": body.get("session_id")})
+                             meta={"session": body.get("session_id"),
+                                   "comment": (body.get("comment") or "")[:2000]})
     except Exception:  # noqa: BLE001
         pass
     return {"ok": True, "n_feedback": len(agent().feedback)}
